@@ -1,0 +1,9 @@
+shiny
+sentence-transformers
+PyMuPDF
+faiss-cpu
+numpy
+scikit-learn
+SpeechRecognition
+pyttsx3
+pyaudio
