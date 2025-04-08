@@ -169,7 +169,7 @@ app_ui = ui.page_fluid(
                 class_="input-area"
             ),
             ui.div(
-                ui.input_action_button("new_chat", "", icon="fa fa-refresh", class_="new-chat-button"),
+                ui.input_action_button("new_chat", "Nouveau Chat", icon="", class_="new-chat-button"),
                 class_="chat-header"
             ),
             class_="chat-container"
