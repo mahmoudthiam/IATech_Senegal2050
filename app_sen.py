@@ -9,11 +9,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
 import speech_recognition as sr
 import pyttsx3  # Lecteur vocal
+import requests
 
 # Charger le modèle NLP
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Lire les PDFs
+# Fonction pour récupérer les fichiers PDF depuis GitHub
+def download_pdf(url):
+    response = requests.get(url)
+    return response.content
+
+# Lire les PDFs depuis GitHub
 def lire_pdfs(dossier):
     texte_total = []
     for fichier in os.listdir(dossier):
@@ -24,9 +30,24 @@ def lire_pdfs(dossier):
                 texte_total.append(page.get_text("text"))
     return texte_total
 
+# URLs des fichiers PDF sur GitHub
+urls_pdfs = [
+    "https://github.com/mahmoudthiam/IATech_Senegal2050/blob/main/Strategie-Nationale-de-Developpement-2025-2029.pdf"
+    # Ajoute d'autres URLs ici
+]
+
+# Télécharger les fichiers PDF et les enregistrer localement
+pdf_folder = "C:/Users/thiam/Desktop/chatGPT/IA_SENEGALVISION2050"
+os.makedirs(pdf_folder, exist_ok=True)
+
+for url in urls_pdfs:
+    filename = os.path.join(pdf_folder, url.split("/")[-1])
+    pdf_data = download_pdf(url)
+    with open(filename, 'wb') as f:
+        f.write(pdf_data)
+
 # Charger les documents
-dossier_pdfs = "C:/Users/thiam/Desktop/chatGPT/IA_SENEGALVISION2050"
-documents = lire_pdfs(dossier_pdfs)
+documents = lire_pdfs(pdf_folder)
 texte_corpus = " ".join(documents)
 
 # Encoder les documents
@@ -44,7 +65,7 @@ def repondre_question(question):
         vect = TfidfVectorizer()
         tfidf_matrix = vect.fit_transform(documents_list + [question])
         scores = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
-        top_indices = np.argsort(scores[0])[-20:][::-1]  # Sélection des 50 meilleures réponses
+        top_indices = np.argsort(scores[0])[-20:][::-1]  # Sélection des 20 meilleures réponses
         meilleure_reponse = ".\n".join([documents_list[i] for i in top_indices]) + '.'
         return meilleure_reponse
     except Exception as e:
@@ -201,7 +222,7 @@ app_ui = ui.page_fluid(
 # Backend
 def server(input, output, session):
     messages = reactive.Value([{
-        "content": "Bonjour ! Je suis un assistant IA. Posez-moi vos question sur la vision SENEGAL 2050.",
+        "content": "Bonjour ! Je suis un assistant IA. Posez-moi des questions sur vos documents PDF.",
         "sender": "bot",
         "time": datetime.now().strftime("%H_%M_%S")  # Ajout des secondes pour plus de granularité
     }])
@@ -275,11 +296,6 @@ def server(input, output, session):
                         class_="message " + ("user-message" if msg["sender"] == "user" else "bot-message")
                     ),
                     # Suppression de l'heure
-                    # ui.div(
-                    #    msg["time"],
-                    #    class_="timestamp"
-                    # ),
-                    # Si le message est du bot, ajouter un bouton de voix
                     ui.div(
                         ui.input_action_button(f"voice_icon_{msg['time']}", "🔊", class_="voice-icon") if msg["sender"] == "bot" else "",
                         style="display: flex; justify-content: flex-end;"
