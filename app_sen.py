@@ -1,53 +1,42 @@
 from shiny import App, ui, render, reactive
 import fitz  # PyMuPDF
-import os
+import requests
+from io import BytesIO
 import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
-import speech_recognition as sr
-import pyttsx3  # Lecteur vocal
-import requests
+import time
 
 # Charger le modèle NLP
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Fonction pour récupérer les fichiers PDF depuis GitHub
-def download_pdf(url):
-    response = requests.get(url)
-    return response.content
-
-# Lire les PDFs depuis GitHub
-def lire_pdfs(dossier):
+# Télécharger et lire les PDFs depuis GitHub
+def lire_pdfs_depuis_github(urls):
     texte_total = []
-    for fichier in os.listdir(dossier):
-        if fichier.endswith(".pdf"):
-            chemin = os.path.join(dossier, fichier)
-            doc = fitz.open(chemin)
-            for page in doc:
-                texte_total.append(page.get_text("text"))
+    for url in urls:
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                # Ouvrir le PDF directement depuis le contenu téléchargé
+                doc = fitz.open(stream=BytesIO(response.content), filetype="pdf")
+                for page in doc:
+                    texte_total.append(page.get_text("text"))
+            else:
+                print(f"Erreur lors du téléchargement : {url}")
+        except Exception as e:
+            print(f"Erreur avec {url} : {e}")
     return texte_total
 
-# URLs des fichiers PDF sur GitHub
-urls_pdfs = [
-    "https://github.com/mahmoudthiam/IATech_Senegal2050/blob/main/Strategie-Nationale-de-Developpement-2025-2029.pdf"
-    # Ajoute d'autres URLs ici
+# Liste des liens vers les PDF hébergés sur GitHub
+pdf_urls = [
+    "https://raw.githubusercontent.com/mahmoudthiam/IATech_Senegal2050/main/Strategie-Nationale-de-Developpement-2025-2029.pdf"
 ]
 
-# Télécharger les fichiers PDF et les enregistrer localement
-pdf_folder = "C:/Users/thiam/Desktop/chatGPT/IA_SENEGALVISION2050"
-os.makedirs(pdf_folder, exist_ok=True)
-
-for url in urls_pdfs:
-    filename = os.path.join(pdf_folder, url.split("/")[-1])
-    pdf_data = download_pdf(url)
-    with open(filename, 'wb') as f:
-        f.write(pdf_data)
-
 # Charger les documents
-documents = lire_pdfs(pdf_folder)
+documents = lire_pdfs_depuis_github(pdf_urls)
 texte_corpus = " ".join(documents)
 
 # Encoder les documents
@@ -65,39 +54,11 @@ def repondre_question(question):
         vect = TfidfVectorizer()
         tfidf_matrix = vect.fit_transform(documents_list + [question])
         scores = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
-        top_indices = np.argsort(scores[0])[-20:][::-1]  # Sélection des 20 meilleures réponses
+        top_indices = np.argsort(scores[0])[-20:][::-1]  # Sélection des 50 meilleures réponses
         meilleure_reponse = ".\n".join([documents_list[i] for i in top_indices]) + '.'
         return meilleure_reponse
     except Exception as e:
         return "Je n'ai pas compris la question."
-
-# Fonction pour la reconnaissance vocale
-def reconnaitre_vocal():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        recognizer.adjust_for_ambient_noise(source)
-        print("Dites quelque chose...")
-        audio = recognizer.listen(source)
-        try:
-            text = recognizer.recognize_google(audio, language='fr-FR')
-            print("Vous avez dit: " + text)
-            return text
-        except sr.UnknownValueError:
-            print("Je n'ai pas pu comprendre")
-            return None
-        except sr.RequestError:
-            print("Erreur de la demande à l'API de reconnaissance vocale")
-            return None
-
-# Fonction de synthèse vocale
-def lire_reponse_vocale(reponse):
-    engine = pyttsx3.init()
-    # Configuration de la vitesse et de la voix
-    engine.setProperty('rate', 150)  # Vitesse de la parole
-    voices = engine.getProperty('voices')
-    engine.setProperty('voice', voices[1].id)  # Choisir une voix (0 = Masculine, 1 = Féminine)
-    engine.say(reponse)
-    engine.runAndWait()
 
 # Interface Shiny
 app_ui = ui.page_fluid(
@@ -181,22 +142,6 @@ app_ui = ui.page_fluid(
                 margin-top: 4px;
                 text-align: right;
             }
-            .icon {
-                cursor: pointer;
-                padding: 5px;
-                background-color: #3b82f6;
-                color: white;
-                border-radius: 50%;
-                margin-top: 10px;
-            }
-            .icon:hover {
-                background-color: #2563eb;
-            }
-            .voice-icon {
-                display: inline-block;
-                margin-left: 10px;
-                cursor: pointer;
-            }
         """)
     ),
     ui.div(
@@ -210,7 +155,6 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.input_text("question", "", placeholder="Envoyez un message..."),
                 ui.input_action_button("send", "Envoyer"),
-                ui.input_action_button("voice_input", "🎤", class_="icon"),  # Icône pour la reconnaissance vocale
                 class_="input-area"
             ),
             class_="chat-container"
@@ -222,9 +166,9 @@ app_ui = ui.page_fluid(
 # Backend
 def server(input, output, session):
     messages = reactive.Value([{
-        "content": "Bonjour ! Je suis un assistant IA. Posez-moi des questions sur vos documents PDF.",
+        "content": "Bonjour ! Je suis un assistant IA. Posez-moi des questions sur la vision SENEGAL 2050",
         "sender": "bot",
-        "time": datetime.now().strftime("%H_%M_%S")  # Ajout des secondes pour plus de granularité
+        "time": datetime.now().strftime("%H:%M")
     }])
 
     @reactive.Effect
@@ -238,7 +182,7 @@ def server(input, output, session):
         new_user_message = {
             "content": question,
             "sender": "user",
-            "time": datetime.now().strftime("%H_%M_%S")  # Ajout des secondes pour plus de granularité
+            "time": datetime.now().strftime("%H:%M")
         }
         messages.set(messages() + [new_user_message])
         ui.update_text("question", value="")
@@ -248,42 +192,9 @@ def server(input, output, session):
         new_bot_message = {
             "content": response,
             "sender": "bot",
-            "time": datetime.now().strftime("%H_%M_%S"),  # Ajout des secondes pour plus de granularité
-            "voice_icon": True  # Ajouter un champ pour indiquer que le bot a une icône de voix
+            "time": datetime.now().strftime("%H:%M")
         }
         messages.set(messages() + [new_bot_message])
-
-    @reactive.Effect
-    @reactive.event(input.voice_input)
-    def voice_input_event():
-        # Reconnaître la question via la voix
-        question = reconnaitre_vocal()
-        if question:
-            new_user_message = {
-                "content": question,
-                "sender": "user",
-                "time": datetime.now().strftime("%H_%M_%S")  # Ajout des secondes pour plus de granularité
-            }
-            messages.set(messages() + [new_user_message])
-
-            # Obtenir et ajouter la réponse du bot
-            response = repondre_question(question)
-            new_bot_message = {
-                "content": response,
-                "sender": "bot",
-                "time": datetime.now().strftime("%H_%M_%S"),  # Ajout des secondes pour plus de granularité
-                "voice_icon": True  # Ajouter un champ pour indiquer que le bot a une icône de voix
-            }
-            messages.set(messages() + [new_bot_message])
-
-    @reactive.Effect
-    @reactive.event(input.voice_icon)
-    def play_audio():
-        # Lancer la lecture vocale de la réponse du bot
-        message_id = input.voice_icon()  # ID unique de l'icône
-        message = next((msg for msg in messages() if f"voice_icon_{msg['time']}" == message_id), None)
-        if message:
-            lire_reponse_vocale(message['content'])  # Lire le message du bot
 
     @output
     @render.ui
@@ -295,10 +206,9 @@ def server(input, output, session):
                         msg["content"],
                         class_="message " + ("user-message" if msg["sender"] == "user" else "bot-message")
                     ),
-                    # Suppression de l'heure
                     ui.div(
-                        ui.input_action_button(f"voice_icon_{msg['time']}", "🔊", class_="voice-icon") if msg["sender"] == "bot" else "",
-                        style="display: flex; justify-content: flex-end;"
+                        msg["time"],
+                        class_="timestamp"
                     ),
                     style="display: flex; flex-direction: column;"
                 )
