@@ -1,9 +1,7 @@
-shiny
-sentence-transformers
-PyMuPDF
-faiss-cpu
-numpy
-scikit-learn
-SpeechRecognition
-pyttsx3
-pyaudio
+shiny==0.4.0
+PyMuPDF==1.21.1
+requests==2.28.1
+faiss-cpu==1.7.2
+sentence-transformers==2.2.0
+scikit-learn==1.0.2
+numpy==1.21.2
