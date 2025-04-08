@@ -60,7 +60,7 @@ def repondre_question(question):
     except Exception as e:
         return "Je n'ai pas compris la question."
 
-# Interface Shiny
+# Interface Shiny modifiée avec un script pour la touche Entrée
 app_ui = ui.page_fluid(
     ui.tags.head(
         ui.tags.style("""
@@ -81,6 +81,17 @@ app_ui = ui.page_fluid(
                 border-bottom: 1px solid #e5e7eb;
                 text-align: center;
                 font-weight: bold;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                position: relative;
+            }
+            .chat-header i {
+                cursor: pointer;
+                font-size: 24px;
+                color: #3b82f6;
+                position: absolute;
+                right: 16px;
             }
             .chat-messages {
                 flex: 1;
@@ -157,6 +168,10 @@ app_ui = ui.page_fluid(
                 ui.input_action_button("send", "Envoyer"),
                 class_="input-area"
             ),
+            ui.div(
+                ui.input_action_button("new_chat", "", icon="fa fa-refresh", class_="new-chat-button"),
+                class_="chat-header"
+            ),
             class_="chat-container"
         ),
         style="padding: 20px; height: 100vh; background-color: #f3f4f6;"
@@ -196,6 +211,15 @@ def server(input, output, session):
         }
         messages.set(messages() + [new_bot_message])
 
+    @reactive.Effect
+    @reactive.event(input.new_chat)  # Réinitialiser les messages lorsque l'on clique sur "Nouveau Chat"
+    def reset_chat():
+        messages.set([{
+            "content": "Bonjour ! Je suis un assistant IA. Posez-moi des questions sur la vision SENEGAL 2050",
+            "sender": "bot",
+            "time": datetime.now().strftime("%H:%M")
+        }])
+
     @output
     @render.ui
     def chat_messages():
@@ -215,6 +239,15 @@ def server(input, output, session):
                 for msg in messages()
             ]
         )
+
+    # Envoi du message si "Entrée" est pressé dans le champ de texte
+    @reactive.Effect
+    @reactive.event(input.question)
+    def send_on_enter():
+        question = input.question()
+        if question and session.input.question().endswith("\n"):
+            # Simulation de l'envoi du message quand on appuie sur "Entrée"
+            input.send()
 
 # App
 app = App(app_ui, server)
